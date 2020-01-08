@@ -1,0 +1,199 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Dec 30 13:30:24 2019
+
+@author: DL5399
+"""
+
+from __future__ import print_function
+import platform
+import os
+import socket
+# import numpy as np
+from prettytable import PrettyTable
+import sys
+import getpass
+from six.moves import input as raw_input
+
+P_Version = sys.version[0]
+Current_os = platform.system().lower()
+hostname = socket.gethostname()
+username = getpass.getuser()
+
+
+def create_param_awk():
+    file = os.popen("sudo touch /tmp/params.awk")
+    file = open("/tmp/params.awk", "w")
+    file.write("BEGIN {gsub(\"[^[:digit:]]+\", \"\",$5)}")
+    file.write("{print $6 \" \"$2\" \"$5}")
+    file.close()
+
+
+def RepresentsInt(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
+def disk_partitions_space_status(all=False):
+    retlist = []
+    f = os.popen("sudo -u oracle df -h |/usr/gnu/bin/awk -f /tmp/params.awk | sort -nrk 3 ")
+    for line in f:
+        if not all and line.startswith('Mounted'):
+            continue
+        fields = line.split()
+        partition = fields[0]
+        size_p = fields[1]
+        if RepresentsInt(size_p):
+            size_p = int(size_p)
+        percentage = fields[2]
+        if RepresentsInt(percentage):
+            percentage = int(percentage)
+        ntuple = (partition, size_p, percentage)
+        retlist.append(ntuple)
+    return retlist
+
+
+def list_to_be_print(to_be_print, i):
+    if i == 1:
+        table_p = PrettyTable(['Filesystem', 'Size', 'Use%'])
+    elif i == 2:
+        table_p = PrettyTable(['Directory', 'Size'])
+    elif i == 3:
+        table_p = PrettyTable(['files', 'Size', 'Use%'])
+    elif i == 4:
+        table_p = PrettyTable(['Filesystem', 'Size', 'Use%'])
+    for line in to_be_print:
+        if not all:
+            continue
+        if i == 1:
+            a = line[0]
+            b = line[1]
+            c = line[2]
+            table_p.add_row([a, b, c])
+        else:
+            a = line[0]
+            b = line[1]
+            table_p.add_row([a, b])
+    print(table_p)
+
+
+def focus_file_system():
+    list_to_o = []
+    i = 1
+    create_param_awk()
+    for part in disk_partitions_space_status():
+        list_to_o.append(part)
+    list_to_be_print(list_to_o, i)
+
+
+def directory_space_status():
+    retlist = []
+    # create_param_shell()
+    if P_Version == "2":
+        val = raw_input("Quel répertoire nous allons vérifier: ")
+    else:
+        val = input("Quel répertoire nous allons vérifier: ")
+    string_t = ("sudo /usr/gnu/bin/find " + val)
+    string_t = (string_t + " -maxdepth 3 -type d -exec du -sh {} \\; ")
+    string_t = (string_t + "| awk '{print $2 \"  \" $1 }'| grep '[0-9]G\\>' |sort -hk 2")
+    print("S'IL VOUS PLAÎT PATIENCET")
+    f = os.popen(string_t)
+    for line in f:
+        fields = line.split()
+        directory = fields[0]
+        file_s = fields[1]
+        if RepresentsInt(file_s):
+            file_s = fields[2]
+        ntuple = (directory, file_s)
+        retlist.append(ntuple)
+    return retlist
+
+
+def focus_on_dir(aux):
+    i = 2
+    list_to_o = []
+    while aux:
+        for part in directory_space_status():
+            list_to_o.append(part)
+        list_to_be_print(list_to_o, i)
+        aux2 = int (raw_input("Aller plus profond?(entrez 1 1 oui, 0 - non) :"))
+        print(aux2)
+        if aux2 == 1:
+            print("++++")
+            focus_on_dir(aux)
+        elif aux2 == 0:
+            print("----")
+            aux = False
+            continue
+        else:
+            print("SVP, Oui ou No")
+    return aux
+
+
+def focus_on_file():
+    retlist = []
+    i = 2
+    f = os.popen("sudo find /u01 -type f -exec du -sh {} \\; | sort -hk 1 | awk '{print $2 " " $1}'")
+    for line in f:
+        if not all and line.startswith('Mounted'):
+            continue
+        fields = line.split()
+        file_ = fields[0]
+        file_s = fields[1]
+        if RepresentsInt(file_s):
+            file_s = fields[2]
+        ntuple = (file_, file_s)
+        retlist.append(ntuple)
+    list_to_be_print(retlist, i)
+
+
+def banner(text, ch='=', length=78):
+    spaced_text = ' %s ' % text
+    banner = spaced_text.center(length, ch)
+    return banner
+
+
+def print_menu():
+
+    print(banner(("OS : " + Current_os), " "))
+    print(banner(("Python : " + P_Version), " "))
+    print(banner(("Server name : " + hostname), " "))
+    print(banner(("User : " + username), " "))
+    print(banner((""), " "))
+    print(banner((""), " "))
+    print(30 * "-", "MENU", 30 * "-")
+    print("1. Vérifier le Filesystem")
+    print("2. vérifier un répertoire spécifique")
+    print("3. File focus")
+    print("4. Menu Option")
+    print("5. Exit")
+    print(67 * "-")
+
+
+def menu_i():
+    loop = True
+    while loop:
+        print_menu()
+        choice = input("Entrez votre choix [1-5]: ")
+        if choice == 1:
+            print("Nous allons travailler sur le Filesystem")
+            focus_file_system()
+        elif choice == 2:
+            print("Nous travaillerons dans un répertoire spécifique")
+            focus_on_dir(True)
+        elif choice == 3:
+            focus_on_file()
+        elif choice == 4:
+            print("Menu 4 has been selected")
+        elif choice == 5:
+            print("Exit")
+            loop = False
+        else:
+            print("Wrong option selection. Enter any key to try again..")
+
+
+if __name__ == '__main__':
+    menu_i()
