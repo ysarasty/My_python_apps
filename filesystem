@@ -9,23 +9,30 @@ from __future__ import print_function
 import platform
 import os
 import socket
-# import numpy as np
 from prettytable import PrettyTable
 import sys
 import getpass
-from six.moves import input as raw_input
+
 
 P_Version = sys.version[0]
 Current_os = platform.system().lower()
 hostname = socket.gethostname()
 username = getpass.getuser()
+line_awk = os.popen("which awk")
+for line in line_awk:
+    awk = line
+awk = awk.replace('\n', ' ').replace('\r', '')
+line_find = os.popen("which find")
+for line in line_find:
+    find = line
+find = find.replace('\n', ' ').replace('\r', '')
 
 
 def create_param_awk():
     file = os.popen("sudo touch /tmp/params.awk")
     file = open("/tmp/params.awk", "w")
     file.write("BEGIN {gsub(\"[^[:digit:]]+\", \"\",$5)}")
-    file.write("{print $6 \" \"$2\" \"$5}")
+    file.write("\n {print $6 \" \"$2\" \"$5}")
     file.close()
 
 
@@ -37,9 +44,38 @@ def RepresentsInt(s):
         return False
 
 
+def create_str(com):
+    if com == 1:
+        str_temp = ("df -Ph|" + awk + " --file /tmp/params.awk | sort -nrk 3 ")
+    elif com == 2:
+        if P_Version == "2":
+            val2 = raw_input("Répertoire a vérifier: ")
+        else:
+            val2 = input("Répertoire a vérifier : ")
+        val2 = val2.replace('\n', ' ').replace('\r', '')
+        str_temp = ("sudo " + find + val2)
+        str_temp = (str_temp + " -maxdepth 3 -type d -exec du -sh {} \\;|" + awk)
+        str_temp = (str_temp + "'{print $2 \"  \" $1 }'| grep '[0-9]G\\>' |sort -nrk 2")
+    elif com == 3:
+        if P_Version == "2":
+            print("Répertoire?")
+            dir_target = raw_input("(Chemin complet) ")
+        else:
+            print("Dans quel répertoire?")
+            dir_target = input("(Chemin complet)")
+        dir_target = dir_target.replace('\n', ' ').replace('\r', '')
+        str_temp = ("sudo " + find + " ")
+        str_temp = (str_temp + dir_target)
+        str_temp = (str_temp + " -type f -size +1G -exec du -sh {} \\;|sort -nrk 1")
+    else:
+        print("No way .....")
+    return str_temp
+
+
 def disk_partitions_space_status(all=False):
     retlist = []
-    f = os.popen("sudo -u oracle df -h |/usr/gnu/bin/awk -f /tmp/params.awk | sort -nrk 3 ")
+    string_1 = create_str(1)
+    f = os.popen(string_1)
     for line in f:
         if not all and line.startswith('Mounted'):
             continue
@@ -59,10 +95,17 @@ def disk_partitions_space_status(all=False):
 def list_to_be_print(to_be_print, i):
     if i == 1:
         table_p = PrettyTable(['Filesystem', 'Size', 'Use%'])
+        table_p.align["Filesystem"] = "l"
+        table_p.align["Size"] = "r"
+        table_p.align["Use%"] = "r"
     elif i == 2:
         table_p = PrettyTable(['Directory', 'Size'])
+        table_p.align["Directory"] = "l"
+        table_p.align["Size"] = "r"
     elif i == 3:
-        table_p = PrettyTable(['files', 'Size', 'Use%'])
+        table_p = PrettyTable(['File', 'Size'])
+        table_p.align["File"] = "l"
+        table_p.align["Size"] = "r"
     elif i == 4:
         table_p = PrettyTable(['Filesystem', 'Size', 'Use%'])
     for line in to_be_print:
@@ -73,7 +116,11 @@ def list_to_be_print(to_be_print, i):
             b = line[1]
             c = line[2]
             table_p.add_row([a, b, c])
-        else:
+        elif i == 2:
+            a = line[0]
+            b = line[1]
+            table_p.add_row([a, b])
+        elif i == 3:
             a = line[0]
             b = line[1]
             table_p.add_row([a, b])
@@ -91,15 +138,9 @@ def focus_file_system():
 
 def directory_space_status():
     retlist = []
-    # create_param_shell()
-    if P_Version == "2":
-        val = raw_input("Quel répertoire nous allons vérifier: ")
-    else:
-        val = input("Quel répertoire nous allons vérifier: ")
-    string_t = ("sudo /usr/gnu/bin/find " + val)
-    string_t = (string_t + " -maxdepth 3 -type d -exec du -sh {} \\; ")
-    string_t = (string_t + "| awk '{print $2 \"  \" $1 }'| grep '[0-9]G\\>' |sort -hk 2")
-    print("S'IL VOUS PLAÎT PATIENCET")
+    string_t = create_str(2)
+    print("Veuillez être patient")
+    print(string_t)
     f = os.popen(string_t)
     for line in f:
         fields = line.split()
@@ -112,42 +153,49 @@ def directory_space_status():
     return retlist
 
 
+def file_space_status():
+    retlist = []
+    string_t = create_str(3)
+    print("Veuillez être patient")
+    print(string_t)
+    f = os.popen(string_t)
+    for line in f:
+        fields = line.split()
+        file_name = fields[1]
+        file_s = fields[0]
+        ntuple = (file_name, file_s)
+        retlist.append(ntuple)
+    return retlist
+
+
 def focus_on_dir(aux):
     i = 2
     list_to_o = []
-    while aux:
+    if aux:
+        print(aux)
         for part in directory_space_status():
             list_to_o.append(part)
         list_to_be_print(list_to_o, i)
-        aux2 = int (raw_input("Aller plus profond?(entrez 1 1 oui, 0 - non) :"))
-        print(aux2)
-        if aux2 == 1:
-            print("++++")
-            focus_on_dir(aux)
-        elif aux2 == 0:
-            print("----")
-            aux = False
-            continue
-        else:
-            print("SVP, Oui ou No")
+    if P_Version == "2":
+        aux2 = int(raw_input("Aller plus profond?(entrez 1  oui, 0 - non) :"))
+    else:
+        aux2 = int(input("Aller plus profond?(1  (oui), 0 (non)) :"))
+    if aux2 == 1:
+        print("++++")
+        focus_on_dir(True)
+    elif aux2 == 0:
+        print("----")
+    else:
+        print("SVP, Oui ou No")
     return aux
 
 
 def focus_on_file():
-    retlist = []
-    i = 2
-    f = os.popen("sudo find /u01 -type f -exec du -sh {} \\; | sort -hk 1 | awk '{print $2 " " $1}'")
-    for line in f:
-        if not all and line.startswith('Mounted'):
-            continue
-        fields = line.split()
-        file_ = fields[0]
-        file_s = fields[1]
-        if RepresentsInt(file_s):
-            file_s = fields[2]
-        ntuple = (file_, file_s)
-        retlist.append(ntuple)
-    list_to_be_print(retlist, i)
+    list_to_o = []
+    i = 3
+    for part in file_space_status():
+        list_to_o.append(part)
+    list_to_be_print(list_to_o, i)
 
 
 def banner(text, ch='=', length=78):
@@ -167,9 +215,8 @@ def print_menu():
     print(30 * "-", "MENU", 30 * "-")
     print("1. Vérifier le Filesystem")
     print("2. vérifier un répertoire spécifique")
-    print("3. File focus")
-    print("4. Menu Option")
-    print("5. Exit")
+    print("3. Rechercher des fichiers > 1G")
+    print("4. Sortir")
     print(67 * "-")
 
 
@@ -177,7 +224,7 @@ def menu_i():
     loop = True
     while loop:
         print_menu()
-        choice = input("Entrez votre choix [1-5]: ")
+        choice = int(input("Entrez votre choix [1-5]: "))
         if choice == 1:
             print("Nous allons travailler sur le Filesystem")
             focus_file_system()
@@ -185,11 +232,10 @@ def menu_i():
             print("Nous travaillerons dans un répertoire spécifique")
             focus_on_dir(True)
         elif choice == 3:
+            print("Nous recherchons des fichiers plus grands que 1G")
             focus_on_file()
         elif choice == 4:
-            print("Menu 4 has been selected")
-        elif choice == 5:
-            print("Exit")
+            print("Sortir")
             loop = False
         else:
             print("Wrong option selection. Enter any key to try again..")
